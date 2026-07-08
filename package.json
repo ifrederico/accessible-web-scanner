@@ -1,0 +1,56 @@
+{
+  "name": "accessible-web-scanner",
+  "version": "1.0.0",
+  "description": "Scan a whole site for accessibility issues — axe-core over your sitemap, with optional Lighthouse audits and human-readable HTML reports",
+  "type": "module",
+  "bin": {
+    "accessible-web-scanner": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && cp -R src/templates dist/templates",
+    "prepublishOnly": "npm run build",
+    "all": "node dist/all.js",
+    "a11y": "node dist/index.js",
+    "lighthouse": "node dist/lighthouse.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ifrederico/accessible-web-scanner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ifrederico/accessible-web-scanner/issues"
+  },
+  "homepage": "https://github.com/ifrederico/accessible-web-scanner#readme",
+  "keywords": [
+    "accessibility",
+    "a11y",
+    "axe-core",
+    "wcag",
+    "audit",
+    "scanner",
+    "sitemap",
+    "lighthouse",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "chrome-launcher": "^1.2.1",
+    "commander": "^12.1.0",
+    "csv-parse": "^5.6.0",
+    "csv-stringify": "^6.6.0",
+    "lighthouse": "^13.0.1",
+    "p-map": "^7.0.4",
+    "playwright": "^1.57.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.3",
+    "typescript": "^5.9.3"
+  }
+}
