@@ -10,7 +10,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && cp -R src/templates dist/templates",
+    "build": "rm -rf dist && tsc && cp -R src/templates dist/templates",
     "prepublishOnly": "npm run build",
     "all": "node dist/all.js",
     "a11y": "node dist/index.js",
