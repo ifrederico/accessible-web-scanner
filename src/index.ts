@@ -64,7 +64,7 @@ program
       if (outDir && partialResults.length > 0 && !options.json) {
         log('\n\nInterrupted. Saving partial results...', quiet);
         const reportData = buildReportData(partialResults);
-        await writeReports(join(outDir, 'report'), ['html', 'csv'], reportData);
+        await writeReports(join(outDir, 'report'), ['html', 'csv', 'json'], reportData);
         log(`Saved ${partialResults.length} results to ${outDir}/`, quiet);
       }
       process.exit(EXIT_ERROR);
@@ -123,10 +123,12 @@ program
 
       const scanStartTime = Date.now();
       let failedCount = 0;
+      let blockedCount = 0;
       let lastSave = 0;
 
       const results = await scanUrls(urls, scanOptions, async (progress) => {
         if (!progress.success) failedCount++;
+        blockedCount = progress.blockedCount;
         partialResults.push(progress.result);
 
         if (!quiet) {
@@ -156,12 +158,22 @@ program
       }
 
       // Normal output mode
-      await writeReports(join(outDir!, 'report'), ['html', 'csv'], reportData);
+      await writeReports(join(outDir!, 'report'), ['html', 'csv', 'json'], reportData);
 
       const elapsed = formatTime(Date.now() - startTime);
       const failed = reportData.failedScans > 0 ? ` (${reportData.failedScans} failed)` : '';
 
       log(`\nCompleted in ${elapsed}${failed}`, quiet);
+      if (blockedCount > 0) {
+        const stillBlocked = results.filter((r) => r.error?.startsWith('Blocked by')).length;
+        log(
+          `Site rate-limited the scanner ${blockedCount} time(s); backed off and retried.` +
+            (stillBlocked > 0
+              ? ` ${stillBlocked} page(s) stayed blocked and are marked failed — try a lower --concurrency.`
+              : ''),
+          quiet
+        );
+      }
       log(`Critical: ${reportData.totals.critical}  Serious: ${reportData.totals.serious}  Moderate: ${reportData.totals.moderate}  Minor: ${reportData.totals.minor}`, quiet);
 
       if (reportData.topIssues.length > 0 && !quiet) {
@@ -181,7 +193,7 @@ program
       if (outDir && partialResults.length > 0) {
         log('\n\nError occurred. Saving partial results...', quiet);
         const reportData = buildReportData(partialResults);
-        await writeReports(join(outDir, 'report'), ['html', 'csv'], reportData);
+        await writeReports(join(outDir, 'report'), ['html', 'csv', 'json'], reportData);
         log(`Saved ${partialResults.length} results to ${outDir}/`, quiet);
       }
       if (!quiet) console.error('\nError:', error instanceof Error ? error.message : error);

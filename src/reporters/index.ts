@@ -6,6 +6,7 @@ import {
 } from '../types.js';
 import { writeCSV } from './csv.js';
 import { writeHTML } from './html.js';
+import { writeJSON } from './json.js';
 
 export function buildReportData(results: ScanResult[]): ReportData {
   const successfulScans = results.filter((r) => r.success);
@@ -95,6 +96,9 @@ export async function writeReports(
         break;
       case 'html':
         await writeHTML(filePath, data);
+        break;
+      case 'json':
+        await writeJSON(filePath, data);
         break;
     }
 

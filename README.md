@@ -60,6 +60,10 @@ accessible-web-scanner lighthouse https://example.com --form-factor mobile
 --form-factor <type>             mobile | desktop (lighthouse only)
 ```
 
+### Rate limiting and bot protection
+
+Some hosts (Shopify, Cloudflare) answer a fast crawler with a "verify your connection" or "too many requests" page instead of the real one. The scanner detects these pages and does not scan them. It backs off, retries, and spaces out the remaining page loads. A page that stays blocked after the retries is reported as a failed scan, not as a list of fake violations. If many pages fail this way, lower `--concurrency`.
+
 ### CI
 
 Exit codes: `0` clean, `1` error, `2` issues found. So this fails a pipeline when violations appear:

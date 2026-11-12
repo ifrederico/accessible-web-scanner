@@ -6,7 +6,7 @@ export type WaitUntilOption = 'load' | 'domcontentloaded' | 'networkidle' | 'com
 
 export type WcagLevel = 'a' | 'aa' | 'aaa';
 
-export type OutputFormat = 'html' | 'csv';
+export type OutputFormat = 'html' | 'csv' | 'json';
 
 export interface ScanOptions {
   concurrency: number;
