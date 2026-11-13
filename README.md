@@ -59,8 +59,13 @@ a1y lighthouse example.com --form-factor mobile
 --wcag <level>                   a | aa | aaa (default aa)
 --storage-state <file>           Playwright auth state, for pages behind login
 --no-screenshots                 Skip screenshots of failing elements
+--devices <list>                 desktop, mobile, or both (default both)
 --form-factor <type>             mobile | desktop (lighthouse only)
 ```
+
+### Desktop and phone
+
+Every page is checked twice, at desktop size (1280px) and phone size (an iPhone 13 screen), because responsive sites show different things at each size: phone menus, filter drawers, slider dots. A problem found at both sizes counts once. Use `--devices desktop` to halve the scan time.
 
 ### Rate limiting and bot protection
 

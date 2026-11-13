@@ -13,7 +13,8 @@ export async function writeHTML(
   const templatePath = join(__dirname, '../templates/report.html');
   const template = await readFile(templatePath, 'utf-8');
 
-  const jsonData = JSON.stringify(data).replace(/</g, '\\u003c');
+  // worstPages repeats entries from results; the page doesn't need it.
+  const jsonData = JSON.stringify({ ...data, worstPages: [] }).replace(/</g, '\\u003c');
   const dataScript = `<script type="application/json" id="report-data">${jsonData}</script>`;
   const html = template.replace('<!-- DATA_PLACEHOLDER -->', dataScript);
 

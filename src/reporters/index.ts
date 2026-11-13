@@ -3,12 +3,17 @@ import {
   ReportData,
   ViolationSummary,
   OutputFormat,
+  Device,
+  WcagLevel,
 } from '../types.js';
 import { writeCSV } from './csv.js';
 import { writeHTML } from './html.js';
 import { writeJSON } from './json.js';
 
-export function buildReportData(results: ScanResult[]): ReportData {
+export function buildReportData(
+  results: ScanResult[],
+  meta: { wcag?: WcagLevel; devices?: Device[] } = {}
+): ReportData {
   const successfulScans = results.filter((r) => r.success);
   const failedScans = results.filter((r) => !r.success);
 
@@ -70,6 +75,7 @@ export function buildReportData(results: ScanResult[]): ReportData {
 
   return {
     generatedAt: new Date().toISOString(),
+    ...meta,
     totalUrls: results.length,
     successfulScans: successfulScans.length,
     failedScans: failedScans.length,

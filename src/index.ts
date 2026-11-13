@@ -7,7 +7,8 @@ import { parseCSV } from './parsers.js';
 import { parseSitemap, isSitemapUrl, isUrl, normalizeSource, isSiteRoot } from './sitemap.js';
 import { scanUrls } from './checker.js';
 import { buildReportData, writeReports } from './reporters/index.js';
-import type { ScanOptions, ScanResult, WaitUntilOption, WcagLevel } from './types.js';
+import type { ScanOptions, ScanResult, WaitUntilOption, WcagLevel, Device } from './types.js';
+import { ALL_DEVICES } from './types.js';
 import {
   EXIT_SUCCESS,
   EXIT_ERROR,
@@ -36,6 +37,19 @@ async function tryLoadSitemapUrls(siteUrl: string, quiet: boolean): Promise<stri
   return null;
 }
 
+function parseDevices(input: string): Device[] {
+  const list = input.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+  const mapped = list.map((d) => (d === 'phone' ? 'mobile' : d));
+  const bad = mapped.filter((d) => !ALL_DEVICES.includes(d as Device));
+  if (bad.length || mapped.length === 0) {
+    throw new Error(`--devices must be desktop, mobile, or both (got "${input}")`);
+  }
+  return [...new Set(mapped)] as Device[];
+}
+
+// Lets the Ctrl+C / error handlers label partial reports with the run's settings.
+const reportMetaRef: { current: { wcag?: WcagLevel; devices?: Device[] } } = { current: {} };
+
 const program = new Command();
 
 program
@@ -55,6 +69,7 @@ program
   .option('--wcag <level>', 'a | aa | aaa', 'aa')
   .option('--storage-state <file>', 'Auth state file')
   .option('--no-screenshots', 'Skip screenshots of failing elements in the HTML report')
+  .option('--devices <list>', 'Screen sizes to test: desktop, mobile, or both', 'desktop,mobile')
   .action(async (source: string, options) => {
     const startTime = Date.now();
     const quiet = options.quiet || options.json;
@@ -65,7 +80,7 @@ program
     const saveAndExit = async () => {
       if (outDir && partialResults.length > 0 && !options.json) {
         log('\n\nInterrupted. Saving partial results...', quiet);
-        const reportData = buildReportData(partialResults);
+        const reportData = buildReportData(partialResults, reportMetaRef.current);
         await writeReports(join(outDir, 'report'), ['html', 'csv', 'json'], reportData);
         log(`Saved ${partialResults.length} results to ${outDir}/`, quiet);
       }
@@ -125,7 +140,10 @@ program
         storageState: options.storageState,
         screenshotDir:
           outDir && options.screenshots ? resolve(outDir, 'screenshots') : undefined,
+        devices: parseDevices(options.devices),
       };
+      const reportMeta = { wcag: scanOptions.wcag, devices: scanOptions.devices };
+      reportMetaRef.current = reportMeta;
 
       const scanStartTime = Date.now();
       let failedCount = 0;
@@ -144,7 +162,7 @@ program
         // Save progress every 20 URLs (skip in JSON mode)
         if (outDir && progress.current - lastSave >= 20) {
           lastSave = progress.current;
-          const tempData = buildReportData(partialResults);
+          const tempData = buildReportData(partialResults, reportMetaRef.current);
           await writeReports(join(outDir, 'report'), ['csv'], tempData);
         }
       });
@@ -154,7 +172,7 @@ program
         process.stdout.write('\r' + ' '.repeat(80) + '\r');
       }
 
-      const reportData = buildReportData(results);
+      const reportData = buildReportData(results, reportMeta);
 
       // JSON output mode
       if (options.json) {
@@ -198,7 +216,7 @@ program
     } catch (error) {
       if (outDir && partialResults.length > 0) {
         log('\n\nError occurred. Saving partial results...', quiet);
-        const reportData = buildReportData(partialResults);
+        const reportData = buildReportData(partialResults, reportMetaRef.current);
         await writeReports(join(outDir, 'report'), ['html', 'csv', 'json'], reportData);
         log(`Saved ${partialResults.length} results to ${outDir}/`, quiet);
       }

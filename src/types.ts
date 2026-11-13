@@ -6,6 +6,9 @@ export type WaitUntilOption = 'load' | 'domcontentloaded' | 'networkidle' | 'com
 
 export type WcagLevel = 'a' | 'aa' | 'aaa';
 
+export type Device = 'desktop' | 'mobile';
+export const ALL_DEVICES: Device[] = ['desktop', 'mobile'];
+
 export type OutputFormat = 'html' | 'csv' | 'json';
 
 export interface ScanOptions {
@@ -19,14 +22,18 @@ export interface ScanOptions {
   storageState?: string;
   /** Absolute directory for element screenshots; omitted = no screenshots. */
   screenshotDir?: string;
+  /** Screen sizes to test each page at. */
+  devices: Device[];
 }
 
 export interface ViolationInstance {
   html: string;
   target: string[];
   failureSummary?: string;
-  /** Path of a screenshot of this element, relative to the report. */
-  screenshot?: string;
+  /** Screen sizes this element failed on. */
+  devices?: Device[];
+  /** Screenshot of this element per device, relative to the report. */
+  screenshots?: Partial<Record<Device, string>>;
 }
 
 export interface Violation {
@@ -52,6 +59,10 @@ export interface ScanResult {
   minor: number;
   // Optional heuristic score
   score?: number;
+  /** Screen sizes this page was tested at. */
+  devices?: Device[];
+  /** Screenshot of the top of the page (phone size when tested), relative to the report. */
+  thumbnail?: string;
 }
 
 export interface ViolationSummary {
@@ -65,6 +76,8 @@ export interface ViolationSummary {
 
 export interface ReportData {
   generatedAt: string;
+  wcag?: WcagLevel;
+  devices?: Device[];
   totalUrls: number;
   successfulScans: number;
   failedScans: number;
@@ -118,4 +131,58 @@ export function getWcagTags(level: WcagLevel): string[] {
     tags.push('wcag2aaa', 'wcag21aaa');
   }
   return tags;
+}
+
+/** Merge per-device results for one URL. An element failing on several devices counts once. */
+export function mergeDeviceResults(
+  url: string,
+  perDevice: { device: Device; result: ScanResult }[]
+): ScanResult {
+  const ok = perDevice.filter((d) => d.result.success);
+  const failed = perDevice.filter((d) => !d.result.success);
+  const byRule = new Map<string, Violation>();
+
+  for (const { device, result } of ok) {
+    for (const v of result.violations) {
+      let merged = byRule.get(v.id);
+      if (!merged) {
+        merged = { ...v, nodes: [] };
+        byRule.set(v.id, merged);
+      }
+      for (const node of v.nodes) {
+        const key = node.target.join(' >>> ');
+        // Same selector, or (inside iframes, where selectors can differ by
+        // screen size) the same HTML not yet seen on this device.
+        let existing =
+          merged.nodes.find((n) => n.target.join(' >>> ') === key) ??
+          merged.nodes.find((n) => n.html === node.html && !n.devices!.includes(device));
+        if (!existing) {
+          existing = { html: node.html, target: node.target, failureSummary: node.failureSummary, devices: [], screenshots: {} };
+          merged.nodes.push(existing);
+        }
+        existing.devices!.push(device);
+        const shot = node.screenshots?.[device];
+        if (shot) existing.screenshots![device] = shot;
+      }
+    }
+  }
+
+  const violations = [...byRule.values()];
+  const thumbnail =
+    ok.find((d) => d.device === 'mobile')?.result.thumbnail ?? ok[0]?.result.thumbnail;
+  const error = failed.length
+    ? failed.map((d) => `${d.device === 'mobile' ? 'Phone' : 'Desktop'}: ${d.result.error}`).join('; ')
+    : undefined;
+
+  return {
+    url,
+    success: ok.length > 0,
+    error,
+    violations,
+    passCount: Math.max(0, ...ok.map((d) => d.result.passCount)),
+    timestamp: new Date(),
+    devices: ok.map((d) => d.device),
+    thumbnail,
+    ...countByImpact(violations),
+  };
 }

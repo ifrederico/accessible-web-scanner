@@ -1,10 +1,12 @@
-import { Browser, BrowserContext, Page } from 'playwright';
+import { Browser, BrowserContext, Page, devices as playwrightDevices } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
 import pMap from 'p-map';
 import {
   ScanOptions,
   ScanResult,
   Violation,
+  Device,
+  mergeDeviceResults,
   mapAxeViolations,
   countByImpact,
   getWcagTags,
@@ -37,7 +39,58 @@ class BlockedError extends Error {}
 // surrounding page to keep around the highlighted element.
 const SHOTS_PER_RULE = 3;
 const SHOT_PADDING = 48;
+const SHOT_MIN = { width: 360, height: 200 };
+const HIDDEN_ATTR = 'data-a11y-scan-hidden';
+
+// Runs in the page (string, since tsconfig has no DOM lib). Hides fixed or
+// sticky layers sitting on top of the element's centre, up to 5 deep.
+const UNCOVER_SCRIPT = `(selector) => {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  for (let i = 0; i < 5; i++) {
+    const top = document.elementFromPoint(x, y);
+    if (!top || top === el || el.contains(top)) return;
+    let cover = null;
+    for (let n = top; n && n !== document.documentElement; n = n.parentElement) {
+      const pos = getComputedStyle(n).position;
+      if (pos === 'fixed' || pos === 'sticky') cover = n;
+    }
+    if (!cover || cover.contains(el)) return;
+    cover.setAttribute('${HIDDEN_ATTR}', cover.style.getPropertyValue('visibility'));
+    cover.style.setProperty('visibility', 'hidden', 'important');
+  }
+}`;
+const RESTORE_SCRIPT = `document.querySelectorAll('[${HIDDEN_ATTR}]').forEach((n) => {
+  const prev = n.getAttribute('${HIDDEN_ATTR}');
+  if (prev) n.style.setProperty('visibility', prev); else n.style.removeProperty('visibility');
+  n.removeAttribute('${HIDDEN_ATTR}');
+})`;
 const OVERLAY_ID = '__aws_highlight__';
+
+// Screen sizes. Scale factor 1 keeps screenshots small.
+const { defaultBrowserType: _ignored, ...iPhone } = playwrightDevices['iPhone 13'];
+const DEVICE_CONTEXT: Record<Device, Parameters<Browser['newContext']>[0]> = {
+  desktop: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
+  mobile: { ...iPhone, deviceScaleFactor: 1 },
+};
+
+function urlHash(url: string): string {
+  return createHash('sha1').update(url).digest('hex').slice(0, 10);
+}
+
+/** Screenshot of the top of the page, for the report's page list. */
+async function captureThumbnail(page: Page, url: string, device: Device, dir: string): Promise<string | undefined> {
+  try {
+    await mkdir(dir, { recursive: true });
+    const file = `${urlHash(url)}-${device}-page.jpg`;
+    await page.screenshot({ path: join(dir, file), type: 'jpeg', quality: 55, animations: 'disabled', timeout: 5000 });
+    return `${basename(dir)}/${file}`;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Screenshot each failing element (up to SHOTS_PER_RULE per rule) with a red
@@ -48,10 +101,11 @@ async function captureScreenshots(
   page: Page,
   url: string,
   violations: Violation[],
-  dir: string
+  dir: string,
+  device: Device
 ): Promise<void> {
   await mkdir(dir, { recursive: true });
-  const urlHash = createHash('sha1').update(url).digest('hex').slice(0, 10);
+  const hash = urlHash(url);
   const folder = basename(dir);
   const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
 
@@ -68,6 +122,10 @@ async function captureScreenshots(
         await el.scrollIntoViewIfNeeded({ timeout: 2000 });
         // Let lazy images and sticky headers settle before measuring.
         await page.waitForTimeout(150);
+        // Hide anything pinned to the screen (cookie banners, sticky headers)
+        // that covers the element, so the screenshot shows the element itself.
+        // Playwright won't pass an argument to a string function, so inline it.
+        await page.evaluate(`(${UNCOVER_SCRIPT})(${JSON.stringify(selector)})`).catch(() => {});
         const box = await el.boundingBox();
         if (!box || box.width < 1 || box.height < 1) continue;
 
@@ -92,13 +150,19 @@ async function captureScreenshots(
           })()`
         );
 
-        const x = Math.max(0, box.x - SHOT_PADDING);
-        const y = Math.max(0, box.y - SHOT_PADDING);
-        const width = Math.min(viewport.width, box.x + box.width + SHOT_PADDING) - x;
-        const height = Math.min(viewport.height, box.y + box.height + SHOT_PADDING) - y;
+        // Pad around the element, and keep at least SHOT_MIN of context so a
+        // tiny element (a slider dot, an icon) is recognisable.
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        const wantW = Math.max(box.width + SHOT_PADDING * 2, SHOT_MIN.width);
+        const wantH = Math.max(box.height + SHOT_PADDING * 2, SHOT_MIN.height);
+        const x = Math.max(0, Math.min(cx - wantW / 2, viewport.width - wantW));
+        const y = Math.max(0, Math.min(cy - wantH / 2, viewport.height - wantH));
+        const width = Math.min(wantW, viewport.width - x);
+        const height = Math.min(wantH, viewport.height - y);
         if (width < 1 || height < 1) continue;
 
-        const file = `${urlHash}-${violation.id}-${i}.jpg`;
+        const file = `${hash}-${device}-${violation.id}-${i}.jpg`;
         await page.screenshot({
           path: join(dir, file),
           type: 'jpeg',
@@ -107,13 +171,14 @@ async function captureScreenshots(
           animations: 'disabled',
           timeout: 5000,
         });
-        node.screenshot = `${folder}/${file}`;
+        node.screenshots = { ...node.screenshots, [device]: `${folder}/${file}` };
       } catch {
         // Skip this element's screenshot.
       } finally {
         await page
           .evaluate(`document.getElementById('${OVERLAY_ID}')?.remove()`)
           .catch(() => {});
+        await page.evaluate(RESTORE_SCRIPT).catch(() => {});
       }
     }
   }
@@ -164,7 +229,9 @@ async function scanPage(
   url: string,
   context: BrowserContext,
   options: ScanOptions,
-  throttle: ThrottleState
+  throttle: ThrottleState,
+  device: Device,
+  takeThumbnail: boolean
 ): Promise<ScanResult> {
   const page = await context.newPage();
   let errorAttempts = 0;
@@ -193,13 +260,18 @@ async function scanPage(
           await page.waitForTimeout(options.postLoadDelay);
         }
 
+        const thumbnail =
+          takeThumbnail && options.screenshotDir
+            ? await captureThumbnail(page, url, device, options.screenshotDir)
+            : undefined;
+
         const axeResults = await new AxeBuilder({ page })
           .withTags(getWcagTags(options.wcag))
           .analyze();
 
         const violations = mapAxeViolations(axeResults.violations);
         if (options.screenshotDir && violations.length > 0) {
-          await captureScreenshots(page, url, violations, options.screenshotDir);
+          await captureScreenshots(page, url, violations, options.screenshotDir, device);
         }
         const counts = countByImpact(violations);
 
@@ -209,6 +281,7 @@ async function scanPage(
           violations,
           passCount: axeResults.passes.length,
           timestamp: new Date(),
+          thumbnail,
           ...counts,
         };
       } catch (error) {
@@ -288,16 +361,25 @@ export async function scanUrls(
     const results = await pMap(
       urls,
       async (url) => {
-        const contextOptions: Parameters<Browser['newContext']>[0] = {};
+        // One thumbnail per page: phone size when tested, else desktop.
+        const thumbDevice: Device = options.devices.includes('mobile') ? 'mobile' : options.devices[0];
+        const perDevice: { device: Device; result: ScanResult }[] = [];
 
-        if (options.storageState) {
-          contextOptions.storageState = options.storageState;
+        for (const device of options.devices) {
+          const context = await browser.newContext({
+            ...DEVICE_CONTEXT[device],
+            ...(options.storageState ? { storageState: options.storageState } : {}),
+          });
+          try {
+            const result = await scanPage(url, context, options, throttle, device, device === thumbDevice);
+            perDevice.push({ device, result });
+          } finally {
+            await context.close();
+          }
         }
 
-        const context = await browser.newContext(contextOptions);
-
-        try {
-          const result = await scanPage(url, context, options, throttle);
+        {
+          const result = mergeDeviceResults(url, perDevice);
           completed++;
 
           if (onProgress) {
@@ -312,8 +394,6 @@ export async function scanUrls(
           }
 
           return result;
-        } finally {
-          await context.close();
         }
       },
       { concurrency: options.concurrency }
