@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { mkdir } from 'fs/promises';
 import { join } from 'path';
 import { parseCSV } from './parsers.js';
-import { parseSitemap, isSitemapUrl, isUrl } from './sitemap.js';
+import { parseSitemap, isSitemapUrl, isUrl, normalizeSource, isSiteRoot } from './sitemap.js';
 import { scanUrls } from './lighthouse-checker.js';
 import { buildLighthouseReportData, type FormFactor, type LighthouseScanResult } from './lighthouse-types.js';
 import { writeLighthouseReports } from './reporters/lighthouse.js';
@@ -17,6 +17,7 @@ import {
   renderProgress,
   log,
   isTTY,
+  VERSION,
 } from './utils.js';
 
 async function tryLoadSitemapUrls(siteUrl: string, quiet: boolean): Promise<string[] | null> {
@@ -48,7 +49,7 @@ const program = new Command();
 program
   .name('lighthouse')
   .description('Lighthouse performance & quality checker - pass a sitemap URL or CSV file')
-  .version('1.0.0')
+  .version(VERSION)
   .argument('<source>', 'Sitemap URL or CSV file')
   .option('-q, --quiet', 'Suppress output, only exit code')
   .option('--json', 'Output JSON to stdout (implies --quiet for logs)')
@@ -78,13 +79,15 @@ program
     process.on('SIGTERM', saveAndExit);
 
     try {
+      source = normalizeSource(source);
       let urls: string[];
 
       if (isSitemapUrl(source)) {
         const result = await parseSitemap(source);
         urls = result.urls;
       } else if (isUrl(source)) {
-        const skipSitemapDiscovery = Boolean(process.env.SKIP_SITEMAP_DISCOVERY);
+        const skipSitemapDiscovery =
+          Boolean(process.env.SKIP_SITEMAP_DISCOVERY) || !isSiteRoot(source);
         const sitemapUrls = skipSitemapDiscovery ? null : await tryLoadSitemapUrls(source, quiet);
         // Single URL provided (unless a sitemap.xml is detected).
         urls = sitemapUrls ?? [source];

@@ -3,10 +3,10 @@
 Point it at your site. It crawls your sitemap, runs [axe-core](https://github.com/dequelabs/axe-core) on every page, and hands you a report of real accessibility issues — the kind you fix in your code, not paper over with an overlay.
 
 ```bash
-npx accessible-web-scanner https://example.com
+npx a1y example.com
 ```
 
-That's it. It finds your sitemap automatically, scans every page, and writes an interactive HTML report plus CSV and JSON to a timestamped folder.
+That's it. It finds your sitemap automatically, scans every page, and writes an interactive HTML report, with a screenshot of each problem, plus CSV and JSON to a timestamped folder. `bunx a1y example.com` works too, and so does the full name: `npx accessible-web-scanner example.com`.
 
 ## Why this instead of axe directly?
 
@@ -14,31 +14,32 @@ axe-core is an engine, not a product. Out of the box it audits one page at a tim
 
 ## Install
 
-Requires Node 18+.
+Requires Node 18+. Nothing else: on the first run it downloads the headless Chromium browser it scans with.
 
 ```bash
-npm install -g accessible-web-scanner
-npx playwright install chromium   # one-time browser download
+npx a1y example.com              # run without installing
+npm install -g a1y               # or install the short command
+npm install -g accessible-web-scanner   # or the full name
 ```
 
-Or run it ad hoc with `npx accessible-web-scanner …` — no install.
+`a1y` is a tiny alias package that runs `accessible-web-scanner`. The two are interchangeable.
 
 ## Usage
 
 ```bash
-# Scan a whole site (sitemap auto-discovered)
-accessible-web-scanner https://example.com
+# Scan a whole site (a bare domain or homepage uses the sitemap)
+a1y example.com
 
-# Scan a specific sitemap, CSV of URLs, or a single page
-accessible-web-scanner https://example.com/sitemap.xml
-accessible-web-scanner urls.csv
-accessible-web-scanner https://example.com/pricing
+# Scan a single page, a specific sitemap, or a CSV of URLs
+a1y example.com/pricing
+a1y https://example.com/sitemap.xml
+a1y urls.csv
 
 # Accessibility + Lighthouse in one run
-accessible-web-scanner all https://example.com
+a1y all example.com
 
-# Lighthouse only
-accessible-web-scanner lighthouse https://example.com --form-factor mobile
+# Lighthouse only (uses your installed Chrome)
+a1y lighthouse example.com --form-factor mobile
 ```
 
 **Output:** a folder like `a11y_example-com_24DEC2025-0938am/` containing `report.html` (interactive — violations grouped by rule, expandable per page, with a screenshot of each failing element outlined in red), a `screenshots/` folder, `report.csv`, and `report.json`. Keep `screenshots/` next to `report.html` when you share the report.
@@ -70,7 +71,7 @@ Some hosts (Shopify, Cloudflare) answer a fast crawler with a "verify your conne
 Exit codes: `0` clean, `1` error, `2` issues found. So this fails a pipeline when violations appear:
 
 ```bash
-accessible-web-scanner https://staging.example.com --quiet
+npx a1y staging.example.com --quiet
 ```
 
 ### CSV input

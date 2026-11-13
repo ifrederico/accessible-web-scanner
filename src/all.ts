@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { VERSION } from './utils.js';
 import { spawn, type StdioOptions } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { parseSitemap, isSitemapUrl, isUrl } from './sitemap.js';
+import { parseSitemap, isSitemapUrl, isUrl, normalizeSource, isSiteRoot } from './sitemap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -67,6 +68,10 @@ async function resolveSource(source: string): Promise<{ source: string; skipDisc
   if (!isUrl(source) || isSitemapUrl(source)) {
     return { source, skipDiscovery: false };
   }
+  if (!isSiteRoot(source)) {
+    // A specific page: scan just that page.
+    return { source, skipDiscovery: true };
+  }
 
   const sitemapUrl = new URL('/sitemap.xml', source).toString();
 
@@ -104,7 +109,7 @@ const program = new Command();
 program
   .name('all')
   .description('Run a11y and lighthouse scans for the same source')
-  .version('1.0.0')
+  .version(VERSION)
   .argument('<source>', 'Sitemap URL, CSV file, or a single URL')
   .option('-q, --quiet', 'Suppress output, only exit code')
   .option('--json', 'Output combined JSON to stdout')
@@ -122,7 +127,7 @@ program
   .action(async (source: string, options) => {
     const captureOutput = Boolean(options.json);
 
-    const resolved = await resolveSource(source);
+    const resolved = await resolveSource(normalizeSource(source));
     const envOverrides = resolved.skipDiscovery ? { SKIP_SITEMAP_DISCOVERY: '1' } : undefined;
 
     const sharedArgs: string[] = [];

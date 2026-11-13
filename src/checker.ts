@@ -1,4 +1,4 @@
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { Browser, BrowserContext, Page } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
 import pMap from 'p-map';
 import {
@@ -10,6 +10,7 @@ import {
   getWcagTags,
 } from './types.js';
 import { sleep } from './utils.js';
+import { launchChromium } from './browser.js';
 import { createHash } from 'crypto';
 import { mkdir } from 'fs/promises';
 import { basename, join } from 'path';
@@ -273,9 +274,7 @@ export async function scanUrls(
   options: ScanOptions,
   onProgress?: ProgressCallback
 ): Promise<ScanResult[]> {
-  const browser = await chromium.launch({
-    headless: true,
-  });
+  const browser = await launchChromium();
 
   let completed = 0;
   const throttle: ThrottleState = {

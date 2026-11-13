@@ -1,3 +1,5 @@
+import { createRequire } from 'module';
+
 export const EXIT_SUCCESS = 0;
 export const EXIT_ERROR = 1;
 export const EXIT_ISSUES_FOUND = 2;
@@ -69,3 +71,6 @@ export function log(msg: string, quiet: boolean): void {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/** Package version, read from package.json (one level above dist/). */
+export const VERSION: string = createRequire(import.meta.url)('../package.json').version;

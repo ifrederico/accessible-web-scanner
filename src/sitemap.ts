@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+
 const IGNORE_PATTERNS = [
   /\.(jpg|jpeg|png|gif|webp|svg|ico|bmp|tiff)$/i,
   /\.(css|js|woff|woff2|ttf|eot|otf)$/i,
@@ -134,4 +136,30 @@ export async function parseSitemap(sitemapUrl: string): Promise<SitemapResult> {
   return {
     urls: Array.from(allUrls).sort(),
   };
+}
+
+/**
+ * Accept a bare domain like `example.com` or `example.com/pricing` by adding
+ * https://. Local files (CSV) and full URLs are returned unchanged.
+ */
+export function normalizeSource(input: string): string {
+  if (existsSync(input)) return input;
+  if (/^https?:\/\//i.test(input)) return input;
+  if (/^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+)(:\d+)?(\/\S*)?$/i.test(input)) {
+    return `https://${input}`;
+  }
+  return input;
+}
+
+/**
+ * A site root (`https://example.com` or `https://example.com/`) means "scan
+ * the whole site" via its sitemap. Any deeper path means "scan this page".
+ */
+export function isSiteRoot(input: string): boolean {
+  try {
+    const url = new URL(input);
+    return (url.pathname === '/' || url.pathname === '') && !url.search;
+  } catch {
+    return false;
+  }
 }

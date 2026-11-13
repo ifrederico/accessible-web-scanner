@@ -1,0 +1,33 @@
+{
+  "name": "a1y",
+  "version": "1.0.0",
+  "description": "Short command for accessible-web-scanner: scan a whole site for accessibility issues. npx a1y example.com",
+  "type": "module",
+  "bin": {
+    "a1y": "cli.js"
+  },
+  "files": [
+    "cli.js"
+  ],
+  "dependencies": {
+    "accessible-web-scanner": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ifrederico/accessible-web-scanner.git",
+    "directory": "packages/a1y"
+  },
+  "homepage": "https://github.com/ifrederico/accessible-web-scanner#readme",
+  "keywords": [
+    "accessibility",
+    "a11y",
+    "axe-core",
+    "wcag",
+    "scanner",
+    "cli"
+  ],
+  "license": "MIT"
+}

@@ -1,7 +1,7 @@
 {
   "name": "accessible-web-scanner",
-  "version": "1.0.0",
-  "description": "Scan a whole site for accessibility issues — axe-core over your sitemap, with optional Lighthouse audits and human-readable HTML reports",
+  "version": "1.1.0",
+  "description": "Scan a whole site for accessibility issues \u2014 axe-core over your sitemap, with optional Lighthouse audits and human-readable HTML reports",
   "type": "module",
   "bin": {
     "accessible-web-scanner": "dist/cli.js"
