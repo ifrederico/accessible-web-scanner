@@ -41,7 +41,7 @@ accessible-web-scanner all https://example.com
 accessible-web-scanner lighthouse https://example.com --form-factor mobile
 ```
 
-**Output:** a folder like `a11y_example-com_24DEC2025-0938am/` containing `report.html` (interactive — violations grouped by rule, expandable per page), `report.csv`, and `report.json`.
+**Output:** a folder like `a11y_example-com_24DEC2025-0938am/` containing `report.html` (interactive — violations grouped by rule, expandable per page, with a screenshot of each failing element outlined in red), a `screenshots/` folder, `report.csv`, and `report.json`. Keep `screenshots/` next to `report.html` when you share the report.
 
 ### Options
 
@@ -57,6 +57,7 @@ accessible-web-scanner lighthouse https://example.com --form-factor mobile
 --retries <n>                    Retries on failure (default 2)
 --wcag <level>                   a | aa | aaa (default aa)
 --storage-state <file>           Playwright auth state, for pages behind login
+--no-screenshots                 Skip screenshots of failing elements
 --form-factor <type>             mobile | desktop (lighthouse only)
 ```
 

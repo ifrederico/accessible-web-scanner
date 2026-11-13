@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { mkdir } from 'fs/promises';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { parseCSV } from './parsers.js';
 import { parseSitemap, isSitemapUrl, isUrl } from './sitemap.js';
 import { scanUrls } from './checker.js';
@@ -53,6 +53,7 @@ program
   .option('--retries <number>', 'Retries on failure', '2')
   .option('--wcag <level>', 'a | aa | aaa', 'aa')
   .option('--storage-state <file>', 'Auth state file')
+  .option('--no-screenshots', 'Skip screenshots of failing elements in the HTML report')
   .action(async (source: string, options) => {
     const startTime = Date.now();
     const quiet = options.quiet || options.json;
@@ -119,6 +120,8 @@ program
         retries: parseInt(options.retries, 10),
         wcag: options.wcag as WcagLevel,
         storageState: options.storageState,
+        screenshotDir:
+          outDir && options.screenshots ? resolve(outDir, 'screenshots') : undefined,
       };
 
       const scanStartTime = Date.now();

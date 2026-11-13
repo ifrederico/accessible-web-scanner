@@ -118,6 +118,7 @@ program
   .option('--wcag <level>', 'a | aa | aaa (a11y only)')
   .option('--storage-state <file>', 'Auth state file (a11y only)')
   .option('--form-factor <type>', 'mobile | desktop (lighthouse only)')
+  .option('--no-screenshots', 'Skip element screenshots in the a11y report (a11y only)')
   .action(async (source: string, options) => {
     const captureOutput = Boolean(options.json);
 
@@ -138,6 +139,7 @@ program
     if (options.postLoadDelay) a11yArgs.push('--post-load-delay', toStringValue(options.postLoadDelay));
     if (options.wcag) a11yArgs.push('--wcag', toStringValue(options.wcag));
     if (options.storageState) a11yArgs.push('--storage-state', toStringValue(options.storageState));
+    if (options.screenshots === false) a11yArgs.push('--no-screenshots');
 
     const lighthouseArgs = [join(__dirname, 'lighthouse.js'), resolved.source, ...sharedArgs];
     if (options.formFactor) lighthouseArgs.push('--form-factor', toStringValue(options.formFactor));

@@ -10,6 +10,9 @@ import {
   getWcagTags,
 } from './types.js';
 import { sleep } from './utils.js';
+import { createHash } from 'crypto';
+import { mkdir } from 'fs/promises';
+import { basename, join } from 'path';
 
 // Pages served by rate limiters / bot protection instead of the real page.
 // Scanning these produces bogus results (meta-refresh, empty headings, etc.).
@@ -28,6 +31,92 @@ const BLOCK_BACKOFF_MS = [15000, 30000, 60000, 90000, 120000];
 const BLOCK_SPACING_MS = 1500;
 
 class BlockedError extends Error {}
+
+// Screenshots: how many failing elements per rule per page, and how much
+// surrounding page to keep around the highlighted element.
+const SHOTS_PER_RULE = 3;
+const SHOT_PADDING = 48;
+const OVERLAY_ID = '__aws_highlight__';
+
+/**
+ * Screenshot each failing element (up to SHOTS_PER_RULE per rule) with a red
+ * box drawn around it. Best effort: an element that can't be captured
+ * (hidden, in an iframe, detached) just gets no screenshot.
+ */
+async function captureScreenshots(
+  page: Page,
+  url: string,
+  violations: Violation[],
+  dir: string
+): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  const urlHash = createHash('sha1').update(url).digest('hex').slice(0, 10);
+  const folder = basename(dir);
+  const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+
+  for (const violation of violations) {
+    for (const [i, node] of violation.nodes.slice(0, SHOTS_PER_RULE).entries()) {
+      // A nested target means the element is inside an iframe (e.g. a YouTube
+      // embed): outline the iframe itself. Whole-document targets (<html>,
+      // <head> content) have nothing useful to frame.
+      const selector = node.target[0];
+      if (typeof selector !== 'string' || selector === 'html') continue;
+
+      try {
+        const el = page.locator(selector).first();
+        await el.scrollIntoViewIfNeeded({ timeout: 2000 });
+        // Let lazy images and sticky headers settle before measuring.
+        await page.waitForTimeout(150);
+        const box = await el.boundingBox();
+        if (!box || box.width < 1 || box.height < 1) continue;
+
+        await page.evaluate(
+          `(() => {
+            const b = ${JSON.stringify(box)};
+            // Custom element + !important so site CSS (e.g. div:empty
+            // { display: none }) can't hide or restyle the outline.
+            const d = document.createElement('a11y-scan-highlight');
+            d.id = '${OVERLAY_ID}';
+            const css = {
+              display: 'block', position: 'fixed', 'pointer-events': 'none',
+              'z-index': '2147483647', 'box-sizing': 'border-box',
+              margin: '0', padding: '0', background: 'transparent',
+              border: '3px solid #e11d48', 'border-radius': '3px',
+              'box-shadow': '0 0 0 2px #fff', transform: 'none',
+              left: (b.x - 4) + 'px', top: (b.y - 4) + 'px',
+              width: (b.width + 8) + 'px', height: (b.height + 8) + 'px',
+            };
+            for (const k in css) d.style.setProperty(k, css[k], 'important');
+            document.documentElement.appendChild(d);
+          })()`
+        );
+
+        const x = Math.max(0, box.x - SHOT_PADDING);
+        const y = Math.max(0, box.y - SHOT_PADDING);
+        const width = Math.min(viewport.width, box.x + box.width + SHOT_PADDING) - x;
+        const height = Math.min(viewport.height, box.y + box.height + SHOT_PADDING) - y;
+        if (width < 1 || height < 1) continue;
+
+        const file = `${urlHash}-${violation.id}-${i}.jpg`;
+        await page.screenshot({
+          path: join(dir, file),
+          type: 'jpeg',
+          quality: 70,
+          clip: { x, y, width, height },
+          animations: 'disabled',
+          timeout: 5000,
+        });
+        node.screenshot = `${folder}/${file}`;
+      } catch {
+        // Skip this element's screenshot.
+      } finally {
+        await page
+          .evaluate(`document.getElementById('${OVERLAY_ID}')?.remove()`)
+          .catch(() => {});
+      }
+    }
+  }
+}
 
 /** Shared across all workers in one scan run. */
 interface ThrottleState {
@@ -108,6 +197,9 @@ async function scanPage(
           .analyze();
 
         const violations = mapAxeViolations(axeResults.violations);
+        if (options.screenshotDir && violations.length > 0) {
+          await captureScreenshots(page, url, violations, options.screenshotDir);
+        }
         const counts = countByImpact(violations);
 
         return {

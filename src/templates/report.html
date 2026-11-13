@@ -139,6 +139,10 @@
     .issue-row.open .issue-pages { display: block; }
 
     .issue-page {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.25rem 0.75rem;
       padding: 0.5rem 0;
       border-bottom: 1px solid var(--border);
       font-family: monospace;
@@ -147,13 +151,12 @@
 
     .issue-page:last-child { border-bottom: none; }
 
-    .issue-page a { color: var(--text); text-decoration: none; }
+    .issue-page a { color: var(--text); text-decoration: none; min-width: 0; overflow-wrap: anywhere; }
     .issue-page a:hover { text-decoration: underline; }
 
     .issue-page-count {
       color: var(--text-muted);
       font-size: 0.75rem;
-      margin-left: 0.5rem;
       text-decoration: underline;
       cursor: pointer;
     }
@@ -248,6 +251,26 @@
 
     .violation-item:last-child { border-bottom: none; }
 
+    .shot {
+      display: block;
+      margin-top: 0.75rem;
+      max-width: 100%;
+      width: fit-content;
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      overflow: hidden;
+      background: #fff;
+    }
+    .shot img { display: block; max-width: 100%; max-height: 360px; height: auto; }
+    .shot-thumb {
+      display: block;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      overflow: hidden;
+      background: #fff;
+    }
+    .shot-thumb img { display: block; max-width: 220px; max-height: 90px; height: auto; }
     .node-html {
       font-family: monospace;
       font-size: 0.75rem;
@@ -357,7 +380,9 @@
               const v = page?.violations.find(v => v.id === issue.id);
               const count = v ? v.nodes.length : 0;
               const pageIdx = data.results.findIndex(r => r.url === url);
-              return `<div class="issue-page"><a href="${url}" target="_blank">${url}</a><a href="#" class="issue-page-count" data-page-idx="${pageIdx}">${count} instances</a></div>`;
+              const shot = v?.nodes.find(n => n.screenshot)?.screenshot;
+              const thumb = shot ? `<a class="shot-thumb" href="${shot}" target="_blank" rel="noopener"><img src="${shot}" loading="lazy" alt="Screenshot of the ${issue.id} problem on this page, outlined in red"></a>` : '';
+              return `<div class="issue-page">${thumb}<a href="${url}" target="_blank">${url}</a><a href="#" class="issue-page-count" data-page-idx="${pageIdx}">${count} instances</a></div>`;
             }).join('')}
           </div>
         `;
@@ -434,7 +459,9 @@
               <span class="issue-meta">${v.nodes.length} instances</span>
               <a href="${v.helpUrl}" target="_blank" rel="noopener" style="margin-left: 0.5rem; font-size: 0.75rem;">Learn more</a>
               <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.25rem;">${escapeHtml(v.help)}</div>
-              ${v.nodes.slice(0, 3).map(n => `<div class="node-html">${escapeHtml(n.html)}</div>`).join('')}
+              ${v.nodes.slice(0, 3).map(n => `
+                ${n.screenshot ? `<a class="shot" href="${n.screenshot}" target="_blank" rel="noopener"><img src="${n.screenshot}" loading="lazy" alt="Screenshot of the ${v.id} problem, outlined in red"></a>` : ''}
+                <div class="node-html">${escapeHtml(n.html)}</div>`).join('')}
               ${v.nodes.length > 3 ? `<div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">+ ${v.nodes.length - 3} more</div>` : ''}
             </div>
           `).join('');

@@ -17,12 +17,16 @@ export interface ScanOptions {
   retries: number;
   wcag: WcagLevel;
   storageState?: string;
+  /** Absolute directory for element screenshots; omitted = no screenshots. */
+  screenshotDir?: string;
 }
 
 export interface ViolationInstance {
   html: string;
   target: string[];
   failureSummary?: string;
+  /** Path of a screenshot of this element, relative to the report. */
+  screenshot?: string;
 }
 
 export interface Violation {
