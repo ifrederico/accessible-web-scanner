@@ -150,10 +150,10 @@ program
       let blockedCount = 0;
       let lastSave = 0;
 
-      const results = await scanUrls(urls, scanOptions, async (progress) => {
+      const allResults = await scanUrls(urls, scanOptions, async (progress) => {
         if (!progress.success) failedCount++;
         blockedCount = progress.blockedCount;
-        partialResults.push(progress.result);
+        if (!progress.result.skipped) partialResults.push(progress.result);
 
         if (!quiet) {
           renderProgress(progress.current, progress.total, failedCount, scanStartTime);
@@ -172,6 +172,11 @@ program
         process.stdout.write('\r' + ' '.repeat(80) + '\r');
       }
 
+      const skipped = allResults.filter((r) => r.skipped);
+      const results = allResults.filter((r) => !r.skipped);
+      if (skipped.length > 0) {
+        log(`\nSkipped ${skipped.length} URL(s) that aren't web pages: ${skipped.map((r) => `${r.url} (${r.skipped})`).join(', ')}`, quiet);
+      }
       const reportData = buildReportData(results, reportMeta);
 
       // JSON output mode

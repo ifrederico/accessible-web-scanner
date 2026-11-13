@@ -63,6 +63,8 @@ export interface ScanResult {
   devices?: Device[];
   /** Screenshot of the top of the page (phone size when tested), relative to the report. */
   thumbnail?: string;
+  /** Set when the URL isn't a web page (e.g. a text or PDF file), so it wasn't checked. */
+  skipped?: string;
 }
 
 export interface ViolationSummary {
@@ -138,6 +140,10 @@ export function mergeDeviceResults(
   url: string,
   perDevice: { device: Device; result: ScanResult }[]
 ): ScanResult {
+  const skipped = perDevice.find((d) => d.result.skipped)?.result.skipped;
+  if (skipped) {
+    return { url, success: true, skipped, violations: [], passCount: 0, timestamp: new Date(), critical: 0, serious: 0, moderate: 0, minor: 0 };
+  }
   const ok = perDevice.filter((d) => d.result.success);
   const failed = perDevice.filter((d) => !d.result.success);
   const byRule = new Map<string, Violation>();

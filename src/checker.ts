@@ -247,6 +247,17 @@ async function scanPage(
           timeout: options.timeout,
         });
 
+        // Accessibility rules apply to web pages, not text, JSON or PDF files
+        // that sitemaps sometimes list (e.g. Shopify's /agents.md).
+        const contentType = response?.headers()['content-type'] ?? '';
+        if (contentType && !/html/i.test(contentType)) {
+          return {
+            url, success: true, skipped: contentType.split(';')[0].trim(),
+            violations: [], passCount: 0, timestamp: new Date(),
+            critical: 0, serious: 0, moderate: 0, minor: 0,
+          };
+        }
+
         const blocked = await detectBlock(page, response?.status());
         if (blocked) throw new BlockedError(blocked);
 
